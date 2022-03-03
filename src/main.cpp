@@ -13,7 +13,7 @@ int person_cnt = 0;
 // define sound speed in cm/uS
 #define SOUND_SPEED 0.034
 #define CM_TO_INCH 0.393701
-#define TOLERANZ 50 // cm
+#define TOLERANZ 100 // cm
 
 float dst_measure_left()
 {
@@ -55,18 +55,18 @@ float dst_measure_right()
   return duration * SOUND_SPEED / 2;
 }
 
-boolean check_distance_threshold_left(float distance_Cm)
+boolean check_distance_threshold_left(float distanceCm_left)
 {
-  if (distance_Cm <= (distanceAverageCmLeft-object_distance))
+  if (distanceCm_left <= (distanceAverageCmLeft-object_distance))
   {
     return true;
   }
   return false;
 }
 
-boolean check_distance_threshold_right(float distance_Cm)
+boolean check_distance_threshold_right(float distanceCm_right)
 {
-  if (distance_Cm <= (distanceAverageCmRight-object_distance))
+  if (distanceCm_right <= (distanceAverageCmRight-object_distance))
   {
     return true;
   }
@@ -75,34 +75,34 @@ boolean check_distance_threshold_right(float distance_Cm)
 
 float build_average_left(float newValue)
 {
-  static float values[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-  static float value_sum = 0;
-  static int next_index = 0;
+  static float values_left[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  static float value_sum_left = 0;
+  static int next_index_left = 0;
 
-  value_sum = value_sum - values[next_index] + newValue;
-  values[next_index] = newValue;
-  next_index = (next_index + 1) % 10;
+  value_sum_left = value_sum_left - values_left[next_index_left] + newValue;
+  values_left[next_index_left] = newValue;
+  next_index_left = (next_index_left + 1) % 10;
 
   //Serial.print("Average Left: ");
   //Serial.println((float)(value_sum / 10.0));
 
-  return (float)(value_sum / 10.0); // return average
+  return (float)(value_sum_left / 10.0); // return average
 }
 
 float build_average_right(float newValue)
 {
-  static float values[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-  static float value_sum = 0;
-  static int next_index = 0;
+  static float values_right[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  static float value_sum_right = 0;
+  static int next_index_right = 0;
 
-  value_sum = value_sum - values[next_index] + newValue;
-  values[next_index] = newValue;
-  next_index = (next_index + 1) % 10;
+  value_sum_right = value_sum_right - values_right[next_index_right] + newValue;
+  values_right[next_index_right] = newValue;
+  next_index_right = (next_index_right + 1) % 10;
   
   //Serial.print("Average Right: ");
   //Serial.println((float)(value_sum / 10.0));
 
-  return (float)(value_sum / 10.0); // return average
+  return (float)(value_sum_right / 10.0); // return average
 }
 
 void setup()
@@ -114,6 +114,17 @@ void setup()
 
   pinMode(trigPin_2, OUTPUT); // Sets the trigPin_2 as an Output
   pinMode(echoPin_2, INPUT);  // Sets the echoPin_2 as an Input
+
+
+  // Average Links und Rechts bilden
+  float distanceCm = 0;
+  for(int msg_cnt=0; msg_cnt++; msg_cnt<10) {
+    distanceCm = dst_measure_left();
+    build_average_left(distanceCm);
+    distanceCm = dst_measure_right();
+    build_average_right(distanceCm);
+    delay(50);
+  }
 }
 
 void loop()
@@ -122,10 +133,12 @@ void loop()
   /* -----------------------------------------------------------------------------
   -- Critical, time-sensitive code measure distance
   ----------------------------------------------------------------------------- */
-  // Measure Left
+  
+
+  /* ------------------------------------------------------------------------------
+  -- Measure Left
+  ------------------------------------------------------------------------------ -*/
   float distanceCm = dst_measure_left();
-
-
   if (check_distance_threshold_left(distanceCm))
   {
     Serial.println("Detected Left");
@@ -157,9 +170,10 @@ void loop()
     distanceAverageCmLeft = build_average_left(distanceCm);
   }
 
-  // Measure Right
+  /* ------------------------------------------------------------------------------
+  -- Measure Right
+  -------------------------------------------------------------------------------- */
   distanceCm = dst_measure_right();
-
   if (check_distance_threshold_right(distanceCm))
   {
     Serial.println("Detected Right");
