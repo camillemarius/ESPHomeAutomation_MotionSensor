@@ -6,14 +6,13 @@ const int echoPin_1 = 12;
 const int trigPin_2 = 5;
 const int echoPin_2 = 4;
 
-const int object_distance = 70; // Körperbreite
+const int object_distance = 100; // Körperbreite
 float distanceCm, distanceAverageCmRight, distanceAverageCmLeft;
 int person_cnt = 0;
 
 // define sound speed in cm/uS
 #define SOUND_SPEED 0.034
 #define CM_TO_INCH 0.393701
-#define TOLERANZ 100 // cm
 
 float dst_measure_left()
 {
@@ -28,11 +27,11 @@ float dst_measure_left()
   digitalWrite(trigPin_1, LOW);
 
   // Reads the echoPin_1, returns the sound wave travel time in microseconds
-  long duration = pulseIn(echoPin_1, HIGH);
+  long duration_left = pulseIn(echoPin_1, HIGH);
   interrupts();
 
   // Calculate the distance
-  return duration * SOUND_SPEED / 2;
+  return duration_left * SOUND_SPEED / 2;
 }
 
 float dst_measure_right()
@@ -48,11 +47,11 @@ float dst_measure_right()
   digitalWrite(trigPin_2, LOW);
 
   // Reads the echoPin_1, returns the sound wave travel time in microseconds
-  long duration = pulseIn(echoPin_2, HIGH);
+  long duration_right = pulseIn(echoPin_2, HIGH);
   interrupts();
 
   // Calculate the distance
-  return duration * SOUND_SPEED / 2;
+  return duration_right * SOUND_SPEED / 2;
 }
 
 boolean check_distance_threshold_left(float distanceCm_left)
@@ -119,22 +118,19 @@ void setup()
   // Average Links und Rechts bilden
   float distanceCm = 0;
   for(int msg_cnt=0; msg_cnt++; msg_cnt<10) {
-    distanceCm = dst_measure_left();
-    build_average_left(distanceCm);
-    distanceCm = dst_measure_right();
-    build_average_right(distanceCm);
+    build_average_left(dst_measure_left());
+    delay(20);
+    build_average_right(dst_measure_right());
     delay(50);
   }
 }
 
 void loop()
 {
-
   /* -----------------------------------------------------------------------------
   -- Critical, time-sensitive code measure distance
   ----------------------------------------------------------------------------- */
   
-
   /* ------------------------------------------------------------------------------
   -- Measure Left
   ------------------------------------------------------------------------------ -*/
