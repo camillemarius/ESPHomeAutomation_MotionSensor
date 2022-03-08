@@ -1,86 +1,115 @@
 #include <Arduino.h>
 
-// Hardware In/-Outputs
-const int trigPin_1 = 14;
-const int echoPin_1 = 12;
-const int trigPin_2 = 5;
-const int echoPin_2 = 4;
+/* ==========================================================================
+== Constants
+========================================================================== */
+// Hardware In-Outputs constants
+const int TRIG_PIN_1 = 14;
+const int ECHO_PIN_1 = 12;
+const int TRIG_PIN_2 = 5;
+const int ECHO_PIN_2 = 4;
 
-const int object_distance = 30; // Körperbreite
+// math constants
+const int  SOUND_SPEED = 0.034;
+const int  CM_TO_INCH = 0.393701;
+const int  ADDITIONAL_THRESHOLD_MAX = 50;
+
+// Measure threshold constants
+const int OBJECT_DISTANCE = 50; // Körperbreite
+
+/* ==========================================================================
+== Variable
+========================================================================== */
 float distanceCm, distanceAverageCmRight, distanceAverageCmLeft;
 int person_cnt = 0;
 
-// define sound speed in cm/uS
-#define SOUND_SPEED 0.034
-#define CM_TO_INCH 0.393701
+/* ==========================================================================
+== Functions
+========================================================================== */
 
-float dst_measure_left()
+/* -----------------------------------------------------------------------------
+-- Measure and Validate Distance Left
+----------------------------------------------------------------------------- */
+float dst_measure_left(boolean check_measure)
 {
   long duration_left = 0;
-  for(int i = 0; i<3; i++) {
-    noInterrupts();
-    // Clears the trigPin_1
-    digitalWrite(trigPin_1, LOW);
-    delayMicroseconds(2);
 
-    // Sets the trigPin_1 on HIGH state for 10 micro seconds
-    digitalWrite(trigPin_1, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(trigPin_1, LOW);
+  noInterrupts();
+  // Clears the TRIG_PIN_1
+  digitalWrite(TRIG_PIN_1, LOW);
+  delayMicroseconds(2);
 
-  // Reads the echoPin_1, returns the sound wave travel time in microseconds
-  duration_left += pulseIn(echoPin_1, HIGH);
-  //duration_left = pulseIn(echoPin_1, HIGH);
+  // Sets the TRIG_PIN_1 on HIGH state for 10 micro seconds
+  digitalWrite(TRIG_PIN_1, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN_1, LOW);
+
+  // Reads the ECHO_PIN_1, returns the sound wave travel time in microseconds
+  duration_left = pulseIn(ECHO_PIN_1, HIGH);
   interrupts();
+
+  // Validate Measure and Calculate distance
+  if((duration_left >= (ADDITIONAL_THRESHOLD_MAX + distanceAverageCmLeft)) && (check_measure == true)) {
+    return distanceAverageCmLeft;
   }
-  // Calculate the distance
-  return (((float) duration_left/3) * SOUND_SPEED) / 2;
-  
-  //return (duration_left) * SOUND_SPEED / 2;
+  return ((float)(( duration_left * SOUND_SPEED) / 2) * CM_TO_INCH);
 }
 
-float dst_measure_right()
+/* -----------------------------------------------------------------------------
+-- Measure and Validate Distance Right
+----------------------------------------------------------------------------- */
+float dst_measure_right(boolean check_measure)
 {
   long duration_right = 0;
-  for(int i = 0; i<3; i++) {
-    noInterrupts();
-    // Clears the trigPin_1
-    digitalWrite(trigPin_2, LOW);
-    delayMicroseconds(2);
 
-    // Sets the trigPin_1 on HIGH state for 10 micro seconds
-    digitalWrite(trigPin_2, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(trigPin_2, LOW);
-  
-  // Reads the echoPin_1, returns the sound wave travel time in microseconds
-  duration_right += pulseIn(echoPin_2, HIGH);
-  //duration_right = pulseIn(echoPin_2, HIGH);
+  noInterrupts();
+  // Clears the TRIG_PIN_2
+  digitalWrite(TRIG_PIN_2, LOW);
+  delayMicroseconds(2);
+
+  // Sets the TRIG_PIN_2 on HIGH state for 10 micro seconds
+  digitalWrite(TRIG_PIN_2, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN_2, LOW);
+
+  // Reads the ECHO_PIN_2, returns the sound wave travel time in microseconds
+  duration_right = pulseIn(ECHO_PIN_2, HIGH);
   interrupts(); 
+
+  // Validate Measure and Calculate distance
+  if((duration_right >= (ADDITIONAL_THRESHOLD_MAX + distanceAverageCmRight)) && (check_measure == true)) {
+    return distanceAverageCmRight;
   }
-  // Calculate the distance
-  return (((float) duration_right/3) * SOUND_SPEED) / 2;
-  //return (duration_right) * SOUND_SPEED / 2;
+  return ((float)(( duration_right * SOUND_SPEED) / 2) * CM_TO_INCH);
 }
 
+/* -----------------------------------------------------------------------------
+-- Check if someone has entered the room from Left Side
+----------------------------------------------------------------------------- */
 boolean check_distance_threshold_left(float distanceCm_left)
 {
-  if (distanceCm_left <= (distanceAverageCmLeft-object_distance))
+  if (distanceCm_left <= (distanceAverageCmLeft-OBJECT_DISTANCE))
   {
     return true;
   }
   return false;
 }
 
+/* -----------------------------------------------------------------------------
+-- Check if someone has entered the room from Right Side
+----------------------------------------------------------------------------- */
 boolean check_distance_threshold_right(float distanceCm_right)
 {
-  if (distanceCm_right <= (distanceAverageCmRight-object_distance))
+  if (distanceCm_right <= (distanceAverageCmRight-OBJECT_DISTANCE))
   {
     return true;
   }
   return false;
 }
 
+/* -----------------------------------------------------------------------------
+-- Build continually average of measurement left
+----------------------------------------------------------------------------- */
 float build_average_left(float newValue)
 {
   static float values_left[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -90,15 +119,13 @@ float build_average_left(float newValue)
   value_sum_left = value_sum_left - values_left[next_index_left] + newValue;
   values_left[next_index_left] = newValue;
   next_index_left = (next_index_left + 1) % 10;
-  
-  /*Serial.print("new Value Left: ");
-  Serial.print(newValue);
-  Serial.print(" Average Left: ");
-  Serial.println((float)(value_sum_left / 10.0));*/
 
   return (float)(value_sum_left / 10.0); // return average
 }
 
+/* -----------------------------------------------------------------------------
+-- Build continually average of measurement right
+----------------------------------------------------------------------------- */
 float build_average_right(float newValue)
 {
   static float values_right[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -108,46 +135,47 @@ float build_average_right(float newValue)
   value_sum_right = value_sum_right - values_right[next_index_right] + newValue;
   values_right[next_index_right] = newValue;
   next_index_right = (next_index_right + 1) % 10;
-  
-  /*Serial.print("new Value Right: ");
-  Serial.print(newValue);
-  Serial.print(" Average Right: ");
-  Serial.println((float)(value_sum_right / 10.0));*/
 
   return (float)(value_sum_right / 10.0); // return average
 }
 
+/* ==========================================================================
+== Setup
+========================================================================== */
 void setup()
 {
   Serial.begin(9600);
 
-  pinMode(trigPin_1, OUTPUT); // Sets the trigPin_1 as an Output
-  pinMode(echoPin_1, INPUT);  // Sets the echoPin_1 as an Input
+  pinMode(TRIG_PIN_1, OUTPUT); // Sets the TRIG_PIN_1 as an Output
+  pinMode(ECHO_PIN_1, INPUT);  // Sets the ECHO_PIN_1 as an Input
 
-  pinMode(trigPin_2, OUTPUT); // Sets the trigPin_2 as an Output
-  pinMode(echoPin_2, INPUT);  // Sets the echoPin_2 as an Input
+  pinMode(TRIG_PIN_2, OUTPUT); // Sets the TRIG_PIN_2 as an Output
+  pinMode(ECHO_PIN_2, INPUT);  // Sets the ECHO_PIN_2 as an Input
 
 
   // Average Links und Rechts bilden
   for(int msg_cnt=0; msg_cnt<10 ; msg_cnt++) {
-    build_average_left(dst_measure_left());
+    build_average_left(dst_measure_left(false));
     delay(50);
-    build_average_right(dst_measure_right());
+    build_average_right(dst_measure_right(false));
     delay(50);
   }
   //publish_state(0);
 }
+
+/* ==========================================================================
+== Loop
+========================================================================== */
 //void update()
 void loop()
 {
-  /* -----------------------------------------------------------------------------
-  -- Critical, time-sensitive code measure distance
-  ----------------------------------------------------------------------------- */
+  float distanceCmRight = 0;
+  float distanceCmLeft = 0;
   
   /* ------------------------------------------------------------------------------
   -- Measure Left
   ------------------------------------------------------------------------------ -*/
-  float distanceCmLeft = dst_measure_left();
+  distanceCmLeft = dst_measure_left(true);
   Serial.print("new Value Left: ");
   Serial.print(distanceCmLeft);
   if (check_distance_threshold_left(distanceCmLeft))
@@ -155,13 +183,10 @@ void loop()
     Serial.print("; Detected Left; ");
     for (int msr_cnt = 0; msr_cnt < 10; msr_cnt++)
     {
-      distanceCmLeft = dst_measure_right();
-      //Serial.print("Distance Right: ");
-      //Serial.print(distanceCmLeft);
-      //Serial.print(", ");
-      if (check_distance_threshold_right(distanceCmLeft))
+      distanceCmRight = dst_measure_right(true);
+      if (check_distance_threshold_right(distanceCmRight))
       {
-        // Person ausgetretten
+        // Person exits the room
         if (person_cnt > 0)
         {
           person_cnt--;
@@ -169,6 +194,7 @@ void loop()
         Serial.println("");
         Serial.print(person_cnt);
         Serial.println(" Person im Raum");
+        //publish_state(person_cnt);
         delay(3000);
         break;
       }
@@ -177,17 +203,16 @@ void loop()
   }
   else
   {
-    // Average Links bilden
+    // build average left
     distanceAverageCmLeft = build_average_left(distanceCmLeft);
   }
   Serial.print(" Average Left: ");
   Serial.println((float)(distanceAverageCmLeft));
 
-
   /* ------------------------------------------------------------------------------
   -- Measure Right
   -------------------------------------------------------------------------------- */
-  float distanceCmRight = dst_measure_right();
+  distanceCmRight = dst_measure_right(true);
   Serial.print("new Value Right: ");
   Serial.print(distanceCmRight);
   if (check_distance_threshold_right(distanceCmRight))
@@ -195,17 +220,15 @@ void loop()
     Serial.println("Detected Right");
     for (int msr_cnt = 0; msr_cnt < 10; msr_cnt++)
     {
-      distanceCmRight = dst_measure_left();
-      //Serial.print("Distance Left: ");
-      //Serial.print(distanceCmRight);
-      //Serial.print(", ");
-      if (check_distance_threshold_left(distanceCmRight))
+      distanceCmLeft = dst_measure_left(true);
+      if (check_distance_threshold_left(distanceCmLeft))
       {
-        // Person eingetretten
+        // Person entered the room
         person_cnt++;
         Serial.println("");
         Serial.print(person_cnt);
         Serial.println(" Person im Raum");
+        //publish_state(person_cnt);
         delay(3000);
         break;
       }
@@ -214,11 +237,14 @@ void loop()
   }
   else
   {
-    // Average Rechts bilden
+    // build average right
     distanceAverageCmRight = build_average_right(distanceCmRight);
   }
   Serial.print(" Average Right: ");
   Serial.println((float)(distanceAverageCmRight));
 
+  /* ------------------------------------------------------------------------------
+  -- delay
+  -------------------------------------------------------------------------------- */
   delay(500);
 }
