@@ -10,12 +10,12 @@ const int TRIG_PIN_2 = 5;
 const int ECHO_PIN_2 = 4;
 
 // math constants
-const int  SOUND_SPEED = 0.034;
-const int  CM_TO_INCH = 0.393701;
-const int  ADDITIONAL_THRESHOLD_MAX = 50;
+const float  SOUND_SPEED = 0.034;
+const float  CM_TO_INCH = 0.393701;
+const int  ADDITIONAL_THRESHOLD_MAX = 20;
 
 // Measure threshold constants
-const int OBJECT_DISTANCE = 50; // Körperbreite
+const int OBJECT_WIDTH = 20; // Körperbreite
 
 /* ==========================================================================
 == Variable
@@ -32,7 +32,8 @@ int person_cnt = 0;
 ----------------------------------------------------------------------------- */
 float dst_measure_left(boolean check_measure)
 {
-  long duration_left = 0;
+  long duration_left=0;
+  float distance_left = 0;
 
   noInterrupts();
   // Clears the TRIG_PIN_1
@@ -46,13 +47,18 @@ float dst_measure_left(boolean check_measure)
 
   // Reads the ECHO_PIN_1, returns the sound wave travel time in microseconds
   duration_left = pulseIn(ECHO_PIN_1, HIGH);
+  distance_left = ((duration_left * SOUND_SPEED / 2) * CM_TO_INCH);
   interrupts();
 
   // Validate Measure and Calculate distance
-  if((duration_left >= (ADDITIONAL_THRESHOLD_MAX + distanceAverageCmLeft)) && (check_measure == true)) {
+  if((distance_left >= (ADDITIONAL_THRESHOLD_MAX + distanceAverageCmLeft)) && (check_measure == true)) {
+    Serial.print("oVL: ");
     return distanceAverageCmLeft;
   }
-  return ((float)(( duration_left * SOUND_SPEED) / 2) * CM_TO_INCH);
+  else {
+    Serial.print("nVL: ");
+    return distance_left;
+  }
 }
 
 /* -----------------------------------------------------------------------------
@@ -61,6 +67,7 @@ float dst_measure_left(boolean check_measure)
 float dst_measure_right(boolean check_measure)
 {
   long duration_right = 0;
+  float distance_right = 0;
 
   noInterrupts();
   // Clears the TRIG_PIN_2
@@ -74,13 +81,18 @@ float dst_measure_right(boolean check_measure)
 
   // Reads the ECHO_PIN_2, returns the sound wave travel time in microseconds
   duration_right = pulseIn(ECHO_PIN_2, HIGH);
+  distance_right = ((duration_right * SOUND_SPEED / 2) * CM_TO_INCH);
   interrupts(); 
 
   // Validate Measure and Calculate distance
-  if((duration_right >= (ADDITIONAL_THRESHOLD_MAX + distanceAverageCmRight)) && (check_measure == true)) {
+  if((distance_right >= (ADDITIONAL_THRESHOLD_MAX + distanceAverageCmRight)) && (check_measure == true)) {
+    Serial.print("oVR: ");
     return distanceAverageCmRight;
   }
-  return ((float)(( duration_right * SOUND_SPEED) / 2) * CM_TO_INCH);
+  else {
+    Serial.print("nVR: ");
+    return distance_right;
+  }
 }
 
 /* -----------------------------------------------------------------------------
@@ -88,7 +100,7 @@ float dst_measure_right(boolean check_measure)
 ----------------------------------------------------------------------------- */
 boolean check_distance_threshold_left(float distanceCm_left)
 {
-  if (distanceCm_left <= (distanceAverageCmLeft-OBJECT_DISTANCE))
+  if (distanceCm_left <= (distanceAverageCmLeft-OBJECT_WIDTH))
   {
     return true;
   }
@@ -100,7 +112,7 @@ boolean check_distance_threshold_left(float distanceCm_left)
 ----------------------------------------------------------------------------- */
 boolean check_distance_threshold_right(float distanceCm_right)
 {
-  if (distanceCm_right <= (distanceAverageCmRight-OBJECT_DISTANCE))
+  if (distanceCm_right <= (distanceAverageCmRight-OBJECT_WIDTH))
   {
     return true;
   }
@@ -155,11 +167,17 @@ void setup()
 
   // Average Links und Rechts bilden
   for(int msg_cnt=0; msg_cnt<10 ; msg_cnt++) {
-    build_average_left(dst_measure_left(false));
+    distanceAverageCmLeft = build_average_left(dst_measure_left(false));
     delay(50);
-    build_average_right(dst_measure_right(false));
+    distanceAverageCmRight = build_average_right(dst_measure_right(false));
     delay(50);
+    Serial.println("");
   }
+
+  Serial.print("Init distanceAverageCmLeft: ");
+  Serial.println(distanceAverageCmLeft);
+  Serial.print("Init distanceAverageCmRight: ");
+  Serial.println(distanceAverageCmRight);
   //publish_state(0);
 }
 
@@ -169,14 +187,13 @@ void setup()
 //void update()
 void loop()
 {
-  float distanceCmRight = 0;
-  float distanceCmLeft = 0;
+  static float distanceCmRight = 0;
+  static float distanceCmLeft = 0;
   
   /* ------------------------------------------------------------------------------
   -- Measure Left
   ------------------------------------------------------------------------------ -*/
   distanceCmLeft = dst_measure_left(true);
-  Serial.print("new Value Left: ");
   Serial.print(distanceCmLeft);
   if (check_distance_threshold_left(distanceCmLeft))
   {
@@ -206,14 +223,13 @@ void loop()
     // build average left
     distanceAverageCmLeft = build_average_left(distanceCmLeft);
   }
-  Serial.print(" Average Left: ");
+  Serial.print(" AL: ");
   Serial.println((float)(distanceAverageCmLeft));
 
   /* ------------------------------------------------------------------------------
   -- Measure Right
   -------------------------------------------------------------------------------- */
   distanceCmRight = dst_measure_right(true);
-  Serial.print("new Value Right: ");
   Serial.print(distanceCmRight);
   if (check_distance_threshold_right(distanceCmRight))
   {
@@ -240,11 +256,11 @@ void loop()
     // build average right
     distanceAverageCmRight = build_average_right(distanceCmRight);
   }
-  Serial.print(" Average Right: ");
+  Serial.print(" AR: ");
   Serial.println((float)(distanceAverageCmRight));
 
   /* ------------------------------------------------------------------------------
   -- delay
   -------------------------------------------------------------------------------- */
-  delay(500);
+  delay(600);
 }
