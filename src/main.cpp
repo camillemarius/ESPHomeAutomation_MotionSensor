@@ -1,21 +1,19 @@
 #include <Arduino.h>
+#include "Adafruit_VL53L0X.h"
 
 /* ==========================================================================
 == Constants
 ========================================================================== */
 // Hardware In-Outputs constants
-const int TRIG_PIN_1 = 14;
-const int ECHO_PIN_1 = 12;
-const int TRIG_PIN_2 = 5;
-const int ECHO_PIN_2 = 4;
+const int SHT_LOX1 = 14; // shutdown-pin D5
+const int SHT_LOX2 = 12; // shutdown-pin D6
 
-// math constants
-const float  SOUND_SPEED = 0.034;
-const float  CM_TO_INCH = 0.393701;
-const int  ADDITIONAL_THRESHOLD_MAX = 20;
+const int LOX1_ADDRESS = 0x30;
+const int LOX2_ADDRESS = 0x31;
 
 // Measure threshold constants
-const int OBJECT_WIDTH = 20; // Körperbreite
+const int  ADDITIONAL_THRESHOLD_MAX = 10;
+const int OBJECT_WIDTH = 10; // Körperbreite
 
 /* ==========================================================================
 == Variable
@@ -24,39 +22,77 @@ float distanceCm, distanceAverageCmRight, distanceAverageCmLeft;
 int person_cnt = 0;
 
 /* ==========================================================================
+== Object
+========================================================================== */
+Adafruit_VL53L0X lox1 = Adafruit_VL53L0X();
+Adafruit_VL53L0X lox2 = Adafruit_VL53L0X();
+VL53L0X_RangingMeasurementData_t measure1;
+VL53L0X_RangingMeasurementData_t measure2;
+
+/* ==========================================================================
 == Functions
 ========================================================================== */
 
 /* -----------------------------------------------------------------------------
 -- Measure and Validate Distance Left
 ----------------------------------------------------------------------------- */
+void setID() {
+  // all reset
+  digitalWrite(SHT_LOX1, LOW);    
+  digitalWrite(SHT_LOX2, LOW);
+  delay(10);
+  // all unreset
+  digitalWrite(SHT_LOX1, HIGH);
+  digitalWrite(SHT_LOX2, HIGH);
+  delay(10);
+
+  // activating LOX1 and resetting LOX2
+  digitalWrite(SHT_LOX1, HIGH);
+  digitalWrite(SHT_LOX2, LOW);
+
+  // initing LOX1
+  if(!lox1.begin(LOX1_ADDRESS)) {
+    Serial.println(F("Failed to boot left VL53L0X"));
+    while(1);
+  }
+  delay(10);
+
+  // activating LOX2
+  digitalWrite(SHT_LOX2, HIGH);
+  delay(10);
+
+  //initing LOX2
+  if(!lox2.begin(LOX2_ADDRESS)) {
+    Serial.println(F("Failed to boot right VL53L0X"));
+    while(1);
+  }
+}
+
 float dst_measure_left(boolean check_measure)
 {
-  long duration_left=0;
   float distance_left = 0;
+  VL53L0X_RangingMeasurementData_t measure;
 
-  noInterrupts();
-  // Clears the TRIG_PIN_1
-  digitalWrite(TRIG_PIN_1, LOW);
-  delayMicroseconds(2);
+  lox1.rangingTest(&measure, false); // pass in 'true' to get debug data printout!
 
-  // Sets the TRIG_PIN_1 on HIGH state for 10 micro seconds
-  digitalWrite(TRIG_PIN_1, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN_1, LOW);
-
-  // Reads the ECHO_PIN_1, returns the sound wave travel time in microseconds
-  duration_left = pulseIn(ECHO_PIN_1, HIGH);
-  distance_left = ((duration_left * SOUND_SPEED / 2) * CM_TO_INCH);
-  interrupts();
+  Serial.print(F("1: "));
+  if (measure.RangeStatus != 4) {  // phase failures have incorrect data
+    //Serial.print("Distance (mm): ");
+    //Serial.println(measure.RangeMilliMeter);
+    distance_left = measure.RangeMilliMeter;
+  } else {
+    Serial.println(" out of range ");
+    return distanceAverageCmLeft;
+  } 
 
   // Validate Measure and Calculate distance
   if((distance_left >= (ADDITIONAL_THRESHOLD_MAX + distanceAverageCmLeft)) && (check_measure == true)) {
-    Serial.print("oVL: ");
+    Serial.print("oVR: distance_left, :");
+    Serial.print(distance_left);
     return distanceAverageCmLeft;
   }
   else {
-    Serial.print("nVL: ");
+    Serial.print("nVR: ");
     return distance_left;
   }
 }
@@ -66,27 +102,24 @@ float dst_measure_left(boolean check_measure)
 ----------------------------------------------------------------------------- */
 float dst_measure_right(boolean check_measure)
 {
-  long duration_right = 0;
   float distance_right = 0;
+  VL53L0X_RangingMeasurementData_t measure;
 
-  noInterrupts();
-  // Clears the TRIG_PIN_2
-  digitalWrite(TRIG_PIN_2, LOW);
-  delayMicroseconds(2);
+  lox2.rangingTest(&measure, false); // pass in 'true' to get debug data printout!
 
-  // Sets the TRIG_PIN_2 on HIGH state for 10 micro seconds
-  digitalWrite(TRIG_PIN_2, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN_2, LOW);
-
-  // Reads the ECHO_PIN_2, returns the sound wave travel time in microseconds
-  duration_right = pulseIn(ECHO_PIN_2, HIGH);
-  distance_right = ((duration_right * SOUND_SPEED / 2) * CM_TO_INCH);
-  interrupts(); 
+  if (measure.RangeStatus != 4) {  // phase failures have incorrect data
+    //Serial.print("Distance (mm): ");
+    //Serial.println(measure.RangeMilliMeter);
+    distance_right = measure.RangeMilliMeter;
+  } else {
+    Serial.println(" out of range ");
+    return distanceAverageCmRight;
+  } 
 
   // Validate Measure and Calculate distance
   if((distance_right >= (ADDITIONAL_THRESHOLD_MAX + distanceAverageCmRight)) && (check_measure == true)) {
-    Serial.print("oVR: ");
+    Serial.print("oVR: distance_right, :");
+    Serial.print(distance_right);
     return distanceAverageCmRight;
   }
   else {
@@ -156,14 +189,22 @@ float build_average_right(float newValue)
 ========================================================================== */
 void setup()
 {
-  Serial.begin(9600);
+  Serial.begin(115200);
+  while (! Serial) {delay(1);} // wait until serial port opens for native USB devices
+  
+  // Sensor
+  pinMode(SHT_LOX1, OUTPUT);
+  pinMode(SHT_LOX2, OUTPUT);
+  
+  Serial.println(F("Shutdown pins inited..."));
+  digitalWrite(SHT_LOX1, LOW);
+  digitalWrite(SHT_LOX2, LOW);
+  Serial.println(F("Both in reset mode...(pins are low)"));
+  Serial.println(F("Starting..."));
+  setID();
 
-  pinMode(TRIG_PIN_1, OUTPUT); // Sets the TRIG_PIN_1 as an Output
-  pinMode(ECHO_PIN_1, INPUT);  // Sets the ECHO_PIN_1 as an Input
-
-  pinMode(TRIG_PIN_2, OUTPUT); // Sets the TRIG_PIN_2 as an Output
-  pinMode(ECHO_PIN_2, INPUT);  // Sets the ECHO_PIN_2 as an Input
-
+  //lox1.configSensor(Adafruit_VL53L0X::VL53L0X_SENSE_LONG_RANGE);
+  //lox2.configSensor(Adafruit_VL53L0X::VL53L0X_SENSE_LONG_RANGE);
 
   // Average Links und Rechts bilden
   for(int msg_cnt=0; msg_cnt<10 ; msg_cnt++) {
@@ -262,5 +303,5 @@ void loop()
   /* ------------------------------------------------------------------------------
   -- delay
   -------------------------------------------------------------------------------- */
-  delay(600);
+  delay(200);
 }
