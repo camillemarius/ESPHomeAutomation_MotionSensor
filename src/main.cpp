@@ -66,6 +66,8 @@ void setID() {
     Serial.println(F("Failed to boot right VL53L0X"));
     while(1);
   }
+
+  //VL53L0X_SetInterruptThresholds()
 }
 
 float dst_measure_left(boolean check_measure)

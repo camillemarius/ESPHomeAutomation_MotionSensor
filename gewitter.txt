@@ -1,0 +1,45 @@
+light:
+- platform: ...
+  effects:
+    - addressable_lambda:
+        name: "Gewitter"
+        update_interval: 16ms
+        lambda: |-
+
+           static int led_cnt = 0;
+           static int led_begin = 0;
+           static int led_end = 9;
+
+            if (initial_run || (led_cnt == led_begin)) {
+                it.range(led_begin+1, led_end) = Color::BLACK;
+                it[led_begin] = current_color; //Color::WHITE; 
+            }
+            else { 
+                /*-----------------------------------------------
+                -- Check Thresholds
+                -----------------------------------------------*/
+                if((led_cnt-led_begin) >= 2) {
+                    it[led_cnt-2].fade_to_black(10);
+                }
+                if((led_cnt-led_begin) >= 1) {
+                    it[led_cnt-1].fade_to_black(10);
+                }
+
+                it[led_cnt] = current_color; //Color::WHITE; 
+                
+                if((led_end-led_cnt) >= 1) {
+                    it[led_cnt+1] = current_color;
+                }
+                if((led_end-led_cnt) >= 2) {
+                    it[led_cnt+2] = current_color;
+                } 
+                
+                /*-----------------------------------------------
+                -- Counter
+                -----------------------------------------------*/
+                led_cnt++;
+                if(led_cnt == led_end) {
+                    led_cnt = led_begin;
+                }
+            }
+    
